@@ -1,0 +1,70 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>URL Shortener</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="container">
+    <h1>LinkShort</h1>
+    <p>Make your long URLs short and shareable.</p>
+
+    <form id="urlForm">
+      <input
+        id="urlInput"
+        type="url"
+        placeholder="https://example.com/your-long-url"
+        required
+      >
+      <button type="submit">Shorten URL</button>
+    </form>
+
+    <div id="result"></div>
+  </main>
+
+  <script>
+    const form = document.getElementById("urlForm");
+    const input = document.getElementById("urlInput");
+    const result = document.getElementById("result");
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      result.textContent = "Creating short link...";
+
+      try {
+        const response = await fetch("/api/shorten", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: input.value })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) throw new Error(data.error);
+
+        result.replaceChildren();
+
+        const link = document.createElement("a");
+        link.href = data.shortUrl;
+        link.textContent = data.shortUrl;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+
+        const copy = document.createElement("button");
+        copy.textContent = "Copy";
+        copy.onclick = async () => {
+          await navigator.clipboard.writeText(data.shortUrl);
+          copy.textContent = "Copied!";
+        };
+
+        result.append(link, copy);
+      } catch (error) {
+        result.textContent = error.message || "Something went wrong.";
+      }
+    });
+  </script>
+</body>
+</html>

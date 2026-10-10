@@ -1,0 +1,11 @@
+node_modules
+.env
+.git
+terraform
+test
+*.pdf
+*.md
+compose.yaml
+Dockerfile
+.dockerignore
+npm-debug.log
