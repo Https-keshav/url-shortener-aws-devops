@@ -26,7 +26,7 @@ jobs:
           docker run -d --name smoke -p 3000:3000 \
             -e PORT=3000 \
             -e DATABASE_URL=postgres://u:p@localhost:5432/x \
-            url-shortener:pr ./app
+            url-shortener:pr
           for i in $(seq 1 15); do
             if curl -fs http://localhost:3000/health; then
               echo; echo "healthy"; exit 0
@@ -43,6 +43,10 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ">=1.10"
+      - name: Debug OIDC claims (temporary)
+        run: |
+          TOKEN=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
+          echo "$TOKEN" | cut -d. -f2 | python3 -c "import sys,base64,json; s=sys.stdin.read().strip(); s+='='*(-len(s)%4); c=json.loads(base64.urlsafe_b64decode(s)); print({k:c[k] for k in ('sub','aud','repository')})"
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
