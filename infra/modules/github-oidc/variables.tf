@@ -1,15 +1,15 @@
 variable "name" {
   type = string
-}   
+}
 variable "github_repo" {
   type = string
-}   
+}
 variable "state_bucket" {
   type = string
 }
 variable "ecr_repository_arn" {
   type = string
-}   
+}
 variable "asg_name" {
   type = string
 }

@@ -1,6 +1,6 @@
 variable "name" {
   type = string
-}   
+}
 
 variable "vpc_id" {
   type = string
@@ -15,6 +15,6 @@ variable "target_port" {
 }
 
 variable "health_check_path" {
-  type = string
+  type    = string
   default = "/health"
 }

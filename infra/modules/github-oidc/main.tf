@@ -103,8 +103,8 @@ resource "aws_iam_role_policy" "deploy" {
         Resource = var.image_tag_parameter_arn
       },
       {
-        Effect = "Allow"
-        Action = ["autoscaling:StartInstanceRefresh", "autoscaling:CancelInstanceRefresh"]
+        Effect   = "Allow"
+        Action   = ["autoscaling:StartInstanceRefresh", "autoscaling:CancelInstanceRefresh"]
         Resource = "arn:aws:autoscaling:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:autoScalingGroup:*:autoScalingGroupName/${var.asg_name}"
       },
       {
