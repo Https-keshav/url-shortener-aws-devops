@@ -1,0 +1,117 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "infra/**"
+      - "docs/**"
+      - "**.md"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: url-shortener-dev
+  ASG_NAME: url-shortener-dev-asg
+  TAG_PARAM: /url-shortener-dev/image-tag
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ github.sha }}
+        run: |
+            docker build -t $REGISTRY/$ECR_REPOSITORY:$TAG -t $REGISTRY/$ECR_REPOSITORY:latest ./app
+      - name: Smoke test before pushing
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ github.sha }}
+        run: |
+          docker run -d --name smoke -p 3000:3000 \
+            -e PORT=3000 \
+            -e DATABASE_URL=postgres://u:p@localhost:5432/x \
+            $REGISTRY/$ECR_REPOSITORY:$TAG
+          for i in $(seq 1 15); do
+            if curl -fs http://localhost:3000/health; then
+              echo; echo "healthy"; exit 0
+            fi
+            sleep 2
+          done
+          docker logs smoke
+          exit 1
+
+      - name: Push image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ github.sha }}
+        run: |
+          docker push $REGISTRY/$ECR_REPOSITORY:$TAG
+          docker push $REGISTRY/$ECR_REPOSITORY:latest       
+
+      - name: Roll out with automatic rollback
+        env:
+          TAG: ${{ github.sha }}
+        run: |
+          set -uo pipefail
+
+          refresh() {
+            local id status deadline
+            id=$(aws autoscaling start-instance-refresh \
+              --auto-scaling-group-name "$ASG_NAME" \
+              --preferences '{"MinHealthyPercentage":50,"InstanceWarmup":120}' \
+              --query InstanceRefreshId --output text) || return 1
+            deadline=$((SECONDS + 1200))
+            while true; do
+              status=$(aws autoscaling describe-instance-refreshes \
+                --auto-scaling-group-name "$ASG_NAME" \
+                --instance-refresh-ids "$id" \
+                --query 'InstanceRefreshes[0].Status' --output text)
+              echo "instance refresh $id: $status"
+              case "$status" in
+                Successful) return 0 ;;
+                Failed|Cancelled|RollbackFailed|RollbackSuccessful) return 1 ;;
+              esac
+              if [ "$SECONDS" -gt "$deadline" ]; then
+                echo "Timed out, cancelling refresh"
+                aws autoscaling cancel-instance-refresh --auto-scaling-group-name "$ASG_NAME" || true
+                return 1
+              fi
+              sleep 20
+            done
+          }
+
+          PREV=$(aws ssm get-parameter --name "$TAG_PARAM" --query Parameter.Value --output text)
+          echo "previous tag: $PREV, new tag: $TAG"
+          aws ssm put-parameter --name "$TAG_PARAM" --type String --value "$TAG" --overwrite
+
+          if refresh; then
+            echo "Deploy succeeded"
+          else
+            echo "Deploy failed, rolling back to $PREV"
+            aws ssm put-parameter --name "$TAG_PARAM" --type String --value "$PREV" --overwrite
+            sleep 60   # let a cancelled refresh finish before starting another
+            refresh || echo "Rollback refresh did not finish cleanly, check the ASG"
+            exit 1
+          fi

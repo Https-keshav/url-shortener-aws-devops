@@ -1,0 +1,79 @@
+name: PR checks
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+env:
+  AWS_REGION: us-east-1
+  TF_DIR: infra/envs/dev
+
+jobs:
+  app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t docker build -t url-shortener:pr ./app
+      - name: Smoke test (container starts and /health answers)
+        run: |
+          docker run -d --name smoke -p 3000:3000 \
+            -e PORT=3000 \
+            -e DATABASE_URL=postgres://u:p@localhost:5432/x \
+            url-shortener:pr
+          for i in $(seq 1 15); do
+            if curl -fs http://localhost:3000/health; then
+              echo; echo "healthy"; exit 0
+            fi
+            sleep 2
+          done
+          docker logs smoke
+          exit 1
+
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ">=1.10"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: fmt
+        run: terraform fmt -check -recursive
+        working-directory: infra
+      - name: init
+        run: terraform init -input=false
+        working-directory: ${{ env.TF_DIR }}
+      - name: validate
+        run: terraform validate -no-color
+        working-directory: ${{ env.TF_DIR }}
+      - name: plan
+        id: plan
+        run: terraform plan -no-color -input=false -lock=false
+        working-directory: ${{ env.TF_DIR }}
+        continue-on-error: true
+      - name: Comment plan on the PR
+        uses: actions/github-script@v7
+        env:
+          PLAN: ${{ steps.plan.outputs.stdout }}
+        with:
+          script: |
+            const plan = (process.env.PLAN || '(no output)').slice(-60000);
+            const body = `### Terraform plan: ${{ steps.plan.outcome }}\n<details><summary>Show plan</summary>\n\n\`\`\`\n${plan}\n\`\`\`\n</details>`;
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+      - name: Fail if plan failed
+        if: steps.plan.outcome == 'failure'
+        run: exit 1

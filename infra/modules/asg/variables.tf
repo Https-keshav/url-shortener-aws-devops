@@ -47,3 +47,9 @@ variable "desired_size" {
   type = number
   default = 2
 }
+variable "image_tag_parameter_name" {
+  type = string
+}
+variable "image_tag_parameter_arn" {
+  type = string
+}
