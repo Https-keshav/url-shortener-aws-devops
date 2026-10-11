@@ -64,15 +64,39 @@ resource "aws_vpc_security_group_ingress_rule" "app_from_alb" {
 module "asg" {
   source = "../../modules/asg"
 
-  name               = local.name
-  region             = var.region
-  public_subnet_ids  = module.vpc.public_subnet_ids
-  app_sg_id          = aws_security_group.app.id
-  target_group_arn   = module.alb.target_group_arn
-  ecr_repository_url = module.ecr.repository_url
-  ecr_repository_arn = module.ecr.repository_arn
-  secret_arn         = module.rds.secret_arn
-  alb_dns_name       = module.alb.dns_name
-  app_port           = var.app_port
-  instance_type      = var.instance_type
+  name                     = local.name
+  region                   = var.region
+  public_subnet_ids        = module.vpc.public_subnet_ids
+  app_sg_id                = aws_security_group.app.id
+  target_group_arn         = module.alb.target_group_arn
+  ecr_repository_url       = module.ecr.repository_url
+  ecr_repository_arn       = module.ecr.repository_arn
+  secret_arn               = module.rds.secret_arn
+  alb_dns_name             = module.alb.dns_name
+  app_port                 = var.app_port
+  instance_type            = var.instance_type
+  image_tag_parameter_name = aws_ssm_parameter.image_tag.name
+  image_tag_parameter_arn  = aws_ssm_parameter.image_tag.arn
+}
+
+resource "aws_ssm_parameter" "image_tag" {
+  name  = "/${local.name}/image-tag"
+  type  = "String"
+  value = "latest"
+
+  lifecycle {
+    ignore_changes = [value] # the pipeline owns this value after creation
+  }
+}
+
+module "github_oidc" {
+  source = "../../modules/github-oidc"
+
+  name                    = local.name
+  github_repo             = var.github_repo
+  state_bucket            = "kt-urlshortener-tfstate-027"
+  ecr_repository_arn      = module.ecr.repository_arn
+  asg_name                = module.asg.asg_name
+  image_tag_parameter_arn = aws_ssm_parameter.image_tag.arn
+  db_secret_arn           = module.rds.secret_arn
 }

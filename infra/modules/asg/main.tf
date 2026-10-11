@@ -49,6 +49,12 @@ resource "aws_iam_role_policy" "app" {
         Effect   = "Allow"
         Action   = "secretsmanager:GetSecretValue"
         Resource = var.secret_arn
+      },
+      {
+        Sid      = "ReadImageTag"
+        Effect   = "Allow"
+        Action   = "ssm:GetParameter"
+        Resource = var.image_tag_parameter_arn
       }
     ]
   })
@@ -77,12 +83,14 @@ resource "aws_launch_template" "this" {
   }
 
   user_data = base64encode(templatefile("${path.module}/user_data.sh.tpl", {
-    region     = var.region
-    secret_arn = var.secret_arn
-    registry   = split("/", var.ecr_repository_url)[0]
-    image      = "${var.ecr_repository_url}:${var.image_tag}"
-    app_port   = var.app_port
-    base_url   = "http://${var.alb_dns_name}"
+    region              = var.region
+    secret_arn          = var.secret_arn
+    registry            = split("/", var.ecr_repository_url)[0]
+    image               = "${var.ecr_repository_url}:${var.image_tag}"
+    app_port            = var.app_port
+    base_url            = "http://${var.alb_dns_name}"
+    ecr_repository_url  = var.ecr_repository_url
+    image_tag_parameter = var.image_tag_parameter_name
   }))
 
   tag_specifications {
@@ -138,3 +146,4 @@ resource "aws_autoscaling_policy" "cpu" {
     target_value = 60
   }
 }
+

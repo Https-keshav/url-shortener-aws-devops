@@ -3,7 +3,7 @@ variable "name" {
 }
 variable "region" {
   type = string
-}   
+}
 variable "public_subnet_ids" {
   type = list(string)
 }
@@ -32,18 +32,24 @@ variable "instance_type" {
   type = string
 }
 variable "image_tag" {
-  type = string
+  type    = string
   default = "latest"
 }
 variable "min_size" {
-  type = number
+  type    = number
   default = 1
 }
 variable "max_size" {
-  type = number
+  type    = number
   default = 3
-}   
+}
 variable "desired_size" {
-  type = number
+  type    = number
   default = 2
+}
+variable "image_tag_parameter_name" {
+  type = string
+}
+variable "image_tag_parameter_arn" {
+  type = string
 }

@@ -23,16 +23,18 @@ CREATE TABLE IF NOT EXISTS public.urls (
     short_code VARCHAR(20) UNIQUE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );"
-
+IMAGE_TAG=$(aws ssm get-parameter --region ${region} \
+  --name ${image_tag_parameter} --query Parameter.Value --output text)
+IMAGE=${ecr_repository_url}:$IMAGE_TAG
 # --- Pull and run the app ---
 aws ecr get-login-password --region ${region} | \
   docker login --username AWS --password-stdin ${registry}
-docker pull ${image}
+docker pull $IMAGE
 
 docker run -d --name app --restart unless-stopped \
   -p ${app_port}:${app_port} \
   -e PORT=${app_port} \
   -e BASE_URL="${base_url}" \
   -e DATABASE_URL="postgres://$DB_USER:$DB_PASS@$DB_HOST:$DB_PORT/$DB_NAME?sslmode=no-verify" \
-  ${image}
+  $IMAGE
   

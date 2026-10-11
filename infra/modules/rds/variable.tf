@@ -3,8 +3,8 @@ variable "name" {
 }
 
 variable "vpc_id" {
-  type =string
-}   
+  type = string
+}
 
 variable "private_subnet_ids" {
   type = list(string)
@@ -12,11 +12,11 @@ variable "private_subnet_ids" {
 
 variable "allowed_sg_ids" {
   description = "Security groups allowed to connect on port 5432"
-  type = list(string)
+  type        = list(string)
 }
 
 variable "db_name" {
-    type = string
+  type = string
 }
 
 variable "db_username" {
@@ -28,10 +28,10 @@ variable "instance_class" {
 }
 
 variable "engine_version" {
-  type = string     
+  type = string
 }
 
 variable "allocated_storage" {
-  type = number
+  type    = number
   default = 20
 }

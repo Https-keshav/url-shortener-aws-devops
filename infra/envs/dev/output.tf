@@ -26,3 +26,9 @@ output "alb_dns_name" {
 output "asg_name" {
   value = module.asg.asg_name
 }
+output "plan_role_arn" {
+  value = module.github_oidc.plan_role_arn
+}
+output "deploy_role_arn" {
+  value = module.github_oidc.deploy_role_arn
+}
